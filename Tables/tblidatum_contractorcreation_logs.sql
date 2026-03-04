@@ -1,3 +1,5 @@
+--To store idatum contractor creation/updation logs
+
 CREATE TABLE tblidatum_contractorcreation_logs(
     api_id SERIAL NOT NULL,
     contractorid integer,

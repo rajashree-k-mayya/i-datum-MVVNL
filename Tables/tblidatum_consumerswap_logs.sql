@@ -1,3 +1,5 @@
+--To store all Swap/delete MI data logs
+
 CREATE TABLE tblidatum_consumerswap_logs(
     swap_id SERIAL NOT NULL,
     distnid integer,

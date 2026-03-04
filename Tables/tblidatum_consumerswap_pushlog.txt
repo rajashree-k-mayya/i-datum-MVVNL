@@ -1,3 +1,5 @@
+--To store/make available for swap/delete MI API Push
+
 CREATE TABLE tblidatum_consumerswap_pushlog(
     swapid SERIAL NOT NULL,
     distnid integer,

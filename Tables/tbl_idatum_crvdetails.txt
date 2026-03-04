@@ -1,3 +1,5 @@
+--To store idatum CRV push logs/Data
+
 CREATE TABLE tbl_idatum_crvdetails(
     crvid SERIAL NOT NULL,
     documentnumber integer,

@@ -1,3 +1,5 @@
+--To Idatum CRI Push Logs/Data
+
 CREATE TABLE tbl_idatum_cridetails(
     criid SERIAL NOT NULL,
     doc_num integer,

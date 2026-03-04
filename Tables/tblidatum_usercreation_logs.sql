@@ -1,3 +1,5 @@
+--To store newly created/updated idatum users data
+
 CREATE TABLE tblidatum_usercreation_logs(
     api_id SERIAL NOT NULL,
     userid integer,

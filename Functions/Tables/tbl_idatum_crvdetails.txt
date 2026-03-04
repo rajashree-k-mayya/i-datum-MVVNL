@@ -1,0 +1,19 @@
+CREATE TABLE tbl_idatum_crvdetails(
+    crvid SERIAL NOT NULL,
+    documentnumber integer,
+    crvdate date,
+    remarks text,
+    warehousecode text,
+    contractorcode integer,
+    divisioncode varchar(10000),
+    materialname text,
+    materialcode text,
+    uom text,
+    stockcondition text,
+    quantity integer,
+    serialno text,
+    "type" text,
+    wh_activity text,
+    createddatetime timestamp without time zone DEFAULT now(),
+    PRIMARY KEY(crvid)
+);

@@ -1,0 +1,17 @@
+CREATE TABLE tbl_idatum_cridetails(
+    criid SERIAL NOT NULL,
+    doc_num integer,
+    cridate text,
+    remarks text,
+    fromcontractorcode text,
+    materialname text,
+    materialcode text,
+    uom text,
+    stock_condition text,
+    quantity integer,
+    serial_num text,
+    "type" text,
+    wh_activity text,
+    createddatetime timestamp without time zone DEFAULT now(),
+    PRIMARY KEY(criid)
+);

@@ -1,0 +1,11 @@
+CREATE TABLE tbl_idatum_api_details(
+    crvid SERIAL NOT NULL,
+    details text,
+    "type" text,
+    wh_activity text,
+    createddatetime timestamp without time zone DEFAULT now(),
+    response varchar(500000),
+    status boolean DEFAULT false,
+    document_number integer,
+    PRIMARY KEY(crvid)
+);

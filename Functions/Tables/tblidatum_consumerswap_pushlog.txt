@@ -1,0 +1,10 @@
+CREATE TABLE tblidatum_consumerswap_pushlog(
+    swapid SERIAL NOT NULL,
+    distnid integer,
+    consumer_number varchar,
+    meternum varchar,
+    status boolean DEFAULT false,
+    createddatetime timestamp without time zone DEFAULT now(),
+    remarks varchar(10000),
+    PRIMARY KEY(swapid)
+);

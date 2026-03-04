@@ -1,0 +1,9 @@
+CREATE TABLE tblidatum_material_master(
+    imm_id SERIAL NOT NULL,
+    mat_rid integer,
+    smcbox_oemid text,
+    smcbox_sapid text,
+    createddatetime timestamp without time zone DEFAULT now(),
+    mat_subcategory text,
+    PRIMARY KEY(imm_id)
+);

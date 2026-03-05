@@ -77,16 +77,16 @@ BEGIN
             where r.responselogid=$1 and r.projectid=$3 and r.activityid=$4 and r.responsestatusid>=0
             )
             , miinsert_cte as(
-            INSERT INTO public.tblidatum_updatemi_logs (distnid,distributionnodecode,request,description,type_id)
-            select m.distnid,distcode,jsonb_build_object('serialNumber',meternum, 'meterStatus','10', 'Stock Status','No', 'meterInstalledById',coalescE(meterinstallbyid,''), 'meterInstalledByName',coalescE(meterinstalledby,''), 'meterInstalledDate',coalescE(installation_date::text,'')
+            INSERT INTO public.tblidatum_updatemi_logs (distnid,distributionnodecode,request,description,type_id,push_datetime)
+            select  distinct m.distnid,distcode,jsonb_build_object('serialNumber',meternum, 'meterStatus','10', 'Stock Status','No', 'meterInstalledById',coalescE(meterinstallbyid,''), 'meterInstalledByName',coalescE(meterinstalledby,''), 'meterInstalledDate',coalescE(installation_date::text,'')
             , 'Id',coalesce(distcode,''), 'oldMeterSerialNumber',coalescE(oldmeternum,barcode,''), 'BodySeal1',coalescE(bodyseal1,''), 'BodySeal2',coalesce(bodyseal2,''), 'BoxSeal1',coalesce(boxseal1,''), 'BoxSeal2',coalesce(boxseal2,''), 'TerminalSeal1',coalesce(termseal1,''), 'TerminalSeal2',coalesce(termseal2,'')
-            , 'smcBoxOEMId',(case when mm.mat_subcategory='SMC Box' then mm.smcbox_oemid else 'NA' end), 'smcBoxSAPId',(case when mm.mat_subcategory='SMC Box' then mm.smcbox_sapid else 'NA' end), 'cableLengthConsumed',coalesce(cablelength,''), 'cableSAPId',(case when mm.mat_subcategory='Service Cable' then mm.smcbox_sapid else 'NA' end), 'cableOEMID',(case when mm.mat_subcategory='Service Cable' then mm.smcbox_oemid else 'NA' end), 'newCT','', 'newCTRatio','', 'SIMNo',coalesce(p.sim_no,''), 'serviceCategory',m.servicecategory,'serviceSubCategory',m.servicesubcategory),m.remarks,106
+            , 'smcBoxOEMId',(case when mm.mat_subcategory='SMC Box' then mm.smcbox_oemid else 'NA' end), 'smcBoxSAPId',(case when mm.mat_subcategory='SMC Box' then mm.smcbox_sapid else 'NA' end), 'cableLengthConsumed',coalesce(cablelength,''), 'cableSAPId',(case when mm.mat_subcategory='Service Cable' then mm.smcbox_sapid else 'NA' end), 'cableOEMID',(case when mm.mat_subcategory='Service Cable' then mm.smcbox_oemid else 'NA' end), 'newCT','', 'newCTRatio','', 'SIMNo',coalesce(p.sim_no,''), 'serviceCategory',m.servicecategory,'serviceSubCategory',m.servicesubcategory),m.remarks,106,now()
 			FROM pivoted_with_sim p
 			JOIN cteamain m ON m.responselogid = p.responselogid
           left  join tbl_idatum_crvdetails crv on crv.serialno=p.meternum
             left join se_material_master m1 on m1.name=crv.materialname and m1.code=crv.materialcode
             left join tblidatum_material_master mm on mm.mat_rid=m1.mm_rid
-			WHERE NOT EXISTS (SELECT 1 FROM tblidatum_updatemi_logs x WHERE x.distnid = m.distnid and x.status=false)           
+			WHERE NOT EXISTS (SELECT 1 FROM tblidatum_updatemi_logs x WHERE x.distnid = m.distnid and x.status=false) and meternum is not null           
 			returning id,request)
 
             select id,'',request::json,106

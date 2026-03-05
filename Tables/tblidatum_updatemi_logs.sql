@@ -1,4 +1,6 @@
 
+--To store update meter details API data/ Newly MI done Data
+
 CREATE TABLE tblidatum_updatemi_logs(
     id SERIAL NOT NULL,
     distnid integer,

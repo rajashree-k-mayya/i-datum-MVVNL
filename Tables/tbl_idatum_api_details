@@ -1,3 +1,5 @@
+--To store all CRV API called Data
+
 CREATE TABLE tbl_idatum_api_details(
     crvid SERIAL NOT NULL,
     details text,

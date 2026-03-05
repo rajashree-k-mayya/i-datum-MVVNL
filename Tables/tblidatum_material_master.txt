@@ -1,3 +1,5 @@
+--To store newly pulled idatum material data
+
 CREATE TABLE tblidatum_material_master(
     imm_id SERIAL NOT NULL,
     mat_rid integer,

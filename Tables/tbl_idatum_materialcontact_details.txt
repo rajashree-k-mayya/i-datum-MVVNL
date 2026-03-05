@@ -1,3 +1,5 @@
+--To store newly pulled material/contractor data logs
+
 CREATE TABLE tbl_idatum_materialcontact_details(
     mcd_id SERIAL NOT NULL,
     details varchar(100000),

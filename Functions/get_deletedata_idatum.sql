@@ -18,10 +18,11 @@ where  r.projectid=999 and r.responsestatusid>=0 and items.categorypropertyalloc
 
 INSERT INTO public.tblidatum_consumerswap_logs (distnid,distributionnodecode,request,description,type_id,pushlog_id)
 
-select m.distnid,m.distcode,jsonb_build_object('serialNumber',m.meternum,'miDeleteFlag',true)
+select distinct m.distnid,m.distcode,jsonb_build_object('serialNumber',m.meternum,'miDeleteFlag',true)
 ,m.remarks,108,m.pushlog_id
 
-from micte m 
+from micte m
+join tblidatum_updatemi_logs u on u.request::jsonb->>'serialNumber' =m.meternum and u.status='true'
 where not exists(select 1 from tblidatum_consumerswap_logs where request::jsonb->>'serialNumber'=m.meternum and distnid=m.distnid and description='delete' and status='false')
 ON CONFLICT (pushlog_id) DO NOTHING;
 

@@ -1,7 +1,6 @@
-CREATE OR REPLACE FUNCTION public.fn_sync_idatum_crv(doc_number integer, bu_rid integer, crvdate text, remarks text, warehousecode text, contractorcode text, divisioncode text, materialname text, materialcode text, uom text, stockcondition text, quantity integer, serialno text, factoryfile text, type text)
- RETURNS void
- LANGUAGE plpgsql
-AS $function$ 
+CREATE OR REPLACE FUNCTION fn_sync_idatum_crv(in doc_number int8, in bu_rid int4, in crvdate text, in remarks text, in warehousecode text, in contractorcode text, in divisioncode text, in materialname text, in materialcode text, in uom text, in stockcondition text, in quantity int4, in serialno text, in factoryfile text, in "type" text)
+  RETURNS void AS 
+$BODY$ 
 
 DECLARE
     matrid int4; contrid int4; stockid int4; matid int4; new_stockid int4; new_matid int4; cnt int4;
@@ -20,7 +19,7 @@ else
 end if;
 
 
-select mm_rid::int4 into matrid from se_material_master where name=materialname and code=materialcode;
+select mm_rid::int4 into matrid from se_material_master where code=materialcode;
 
 select contact_rid::int4 into contrid from se_contact where vendor_code=contractorcode;
 
@@ -32,11 +31,14 @@ if $15='serialized' then
 
         if not exists(select 1 from se_stock_material_serial_no where stock_rid=stockid and serial_no=$13) then 
             INSERT INTO se_stock_material_serial_no (stock_rid, mat_rid, serial_no, make_rid) VALUES (stockid,matid,upper(serialno),0);
+
+            update se_stock set qty=coalesce(qty,0) + 1 where stock_rid=stockid;
+
         end if;
 
-        select count(*) into cnt from se_stock_material_serial_no where stock_rid=stockid;
+        --select count(*) into cnt from se_stock_material_serial_no where stock_rid=stockid;
 
-        update se_stock set qty=coalesce(qty,0) + cnt::numeric(10,4) where stock_rid=stockid;
+
 
 
     else 
@@ -47,11 +49,14 @@ if $15='serialized' then
             RETURNING stock_rid, mat_rid into new_stockid, new_matid;
 
             INSERT INTO se_stock_material_serial_no (stock_rid, mat_rid, serial_no, make_rid) VALUES (new_stockid,new_matid,upper(serialno),0);
+
+            update se_stock set qty=coalesce(qty,0) + 1 where stock_rid=new_stockid;
+
         end if; 
 
-        select count(*) into cnt from se_stock_material_serial_no where stock_rid=new_stockid;
+        --select count(*) into cnt from se_stock_material_serial_no where stock_rid=new_stockid;
 
-        update se_stock set qty=coalesce(qty,0) + cnt::numeric(10,4) where stock_rid=new_stockid;
+        --update se_stock set qty=coalesce(qty,0) + cnt::numeric(10,4) where stock_rid=new_stockid;
 
     end if;
 
@@ -111,4 +116,5 @@ end if;
 
 
 END;
-$function$
+$BODY$
+  LANGUAGE 'plpgsql' COST 100.0 SECURITY INVOKER

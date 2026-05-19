@@ -1,0 +1,14 @@
+CREATE TABLE public.tblidatum_consumerswap_logs (swap_id              serial primary key,
+                                                 distnid              INT4 NULL,
+                                                 distributionnodecode VARCHAR NULL,
+                                                 source               VARCHAR(100) NULL,
+                                                 request              VARCHAR(500000) NULL,
+                                                 response             VARCHAR(500000) NULL,
+                                                 description          VARCHAR(500) NULL,
+                                                 status               BOOL DEFAULT false NULL,
+                                                 created_datetime     TIMESTAMP(6) DEFAULT now() NULL,
+                                                 type_id              INT4 NULL,
+                                                 push_datetime        TIMESTAMP(6) NULL,
+                                                 pushlog_id           INT8 NULL);
+
+CREATE UNIQUE INDEX uniq_delete_event ON public.tblidatum_consumerswap_logs (pushlog_id);

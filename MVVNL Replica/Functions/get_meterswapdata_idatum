@@ -1,7 +1,6 @@
-CREATE OR REPLACE FUNCTION public.get_meterswapdata_idatum()
- RETURNS void
- LANGUAGE plpgsql
-AS $function$ 
+CREATE OR REPLACE FUNCTION get_meterswapdata_idatum()
+  RETURNS void AS 
+$BODY$ 
 BEGIN
 
 --meter change
@@ -33,4 +32,5 @@ where not exists(select 1 from tblidatum_consumerswap_logs cp where cp.distnid=m
 
 
 END;
-$function$
+$BODY$
+  LANGUAGE 'plpgsql' COST 100.0 SECURITY INVOKER

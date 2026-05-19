@@ -1,0 +1,4 @@
+CREATE TABLE public.tbl_idatum_materialcontact_details (mcd_id          serial primary key,
+                                                        details         VARCHAR(10000000) NULL,
+                                                        activity_type   VARCHAR NULL,
+                                                        createddatetime TIMESTAMP(6) DEFAULT now() NULL);

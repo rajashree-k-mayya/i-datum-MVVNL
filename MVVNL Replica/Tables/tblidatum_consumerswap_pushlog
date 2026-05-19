@@ -1,0 +1,7 @@
+CREATE TABLE public.tblidatum_consumerswap_pushlog (swapid          serial primary key,
+                                                    distnid         INT4 NULL,
+                                                    consumer_number VARCHAR NULL,
+                                                    meternum        VARCHAR NULL,
+                                                    status          BOOL DEFAULT false NULL,
+                                                    createddatetime TIMESTAMP(6) DEFAULT now() NULL,
+                                                    remarks         VARCHAR(10000) NULL);

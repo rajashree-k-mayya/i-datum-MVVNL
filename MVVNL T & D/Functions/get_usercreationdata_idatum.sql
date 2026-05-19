@@ -1,7 +1,6 @@
-CREATE OR REPLACE FUNCTION public.get_usercreationdata_idatum()
- RETURNS void
- LANGUAGE plpgsql
-AS $function$ 
+CREATE OR REPLACE FUNCTION get_usercreationdata_idatum()
+  RETURNS void AS 
+$BODY$ 
 BEGIN 
 
 with contactctea as(
@@ -19,13 +18,7 @@ u.alternative_emailid,'password', '','contractorName', firm_name, 'contractorId'
 jsonb_build_object('location' , '','date' , ''),'dob', u.date_of_birth),'Create Technician',100,true from contactctea u 
 left join tblusers b on u.incharge_user_rid=b.userid
 where not exists(select 1 from  tblidatum_usercreation_logs where status_created='0' and userid=u.userid);
---RETURNING userid, request::jsonb ;
-
---INSERT INTO tblidatum_userid_pushlog (userid, status_inserted,description,type_id) 
---SELECT userid, 'true','Create Technician',100 FROM inserted ;
-
--- SELECT userid, request::jsonb 
--- FROM inserted; 
 
 END; 
-$function$
+$BODY$
+  LANGUAGE 'plpgsql' COST 100.0 SECURITY INVOKER

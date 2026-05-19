@@ -1,0 +1,7 @@
+CREATE TABLE public.tblidatum_material_master (imm_id              serial primary key,
+                                               mat_rid             INT4 NULL,
+                                               sap_vendor_code     TEXT NULL,
+                                               sap_vendor_oem_name TEXT NULL,
+                                               createddatetime     TIMESTAMP(6) DEFAULT now() NULL,
+                                               mat_subcategory     TEXT NULL,
+                                               sap_material_code   VARCHAR NULL);

@@ -1,0 +1,22 @@
+CREATE TABLE public.tblidatum_usercreation_logs (api_id           serial primary key,
+                                                 userid           INT4 NULL,
+                                                 roleid           INT4 NULL,
+                                                 contactid        INT4 NULL,
+                                                 source           TEXT NULL,
+                                                 request_url      TEXT NULL,
+                                                 request          VARCHAR(500000) NULL,
+                                                 response         VARCHAR(500000) NULL,
+                                                 description      VARCHAR(500) NULL,
+                                                 status_created   BOOL DEFAULT false NULL,
+                                                 status_updated   BOOL DEFAULT false NULL,
+                                                 created_datetime TIMESTAMP(6) DEFAULT now() NULL,
+                                                 inserted         BOOL DEFAULT false NULL,
+                                                 updated          BOOL DEFAULT false NULL,
+                                                 type_id          INT4 NULL,
+                                                 push_datetime    TIMESTAMP(6) NULL);
+
+CREATE INDEX idx_userlog_active_latest ON public.tblidatum_usercreation_logs (userid, roleid, contactid, api_id)
+ WHERE ((inserted = true) OR (updated = true));
+CREATE INDEX idx_userlog_inserted_userid ON public.tblidatum_usercreation_logs (userid)
+ WHERE (inserted = true);
+CREATE INDEX idx_userlog_userid_apiid_desc ON public.tblidatum_usercreation_logs (userid, api_id);

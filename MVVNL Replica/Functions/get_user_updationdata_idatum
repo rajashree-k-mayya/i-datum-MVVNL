@@ -1,7 +1,6 @@
-CREATE OR REPLACE FUNCTION public.get_user_updationdata_idatum()
- RETURNS void
- LANGUAGE plpgsql
-AS $function$ 
+CREATE OR REPLACE FUNCTION get_user_updationdata_idatum()
+  RETURNS void AS 
+$BODY$ 
 BEGIN 
 
 
@@ -30,4 +29,5 @@ where (b1.roleid<>u.roleid or b1.contactid<>u.contact_rid) and not exists(select
  
 
 END; 
-$function$
+$BODY$
+  LANGUAGE 'plpgsql' COST 100.0 SECURITY INVOKER

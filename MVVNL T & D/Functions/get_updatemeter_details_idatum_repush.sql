@@ -1,14 +1,13 @@
-CREATE OR REPLACE FUNCTION public.get_updatemeter_details_idatum_repush()
- RETURNS TABLE(respid integer, url text, json1 json, codepart integer)
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION get_updatemeter_details_idatum_repush()
+  RETURNS TABLE (respid int4, url text, json1 json, codepart int4) AS 
+$BODY$
 
 BEGIN
 	return query
     with missing_dist as (
         select r.responselogid, r.distnid, r.response
         from tblresponselogs r
-        where r.projectid = 19 and r.responsestatusid >= 0 and r.activityid not in (-1,81) and r.response is not null
+        where r.projectid = 19 and r.responsestatusid >= 0 and r.activityid not in (-1) and r.response is not null
         and r.response <> '' and r.response like '{%'
         and not exists (select 1 from tblidatum_updatemi_logs x where x.distnid = r.distnid and x.status = false and x.type_id = 106)
     )
@@ -20,6 +19,8 @@ BEGIN
 
         -- safe full value extraction
         coalesce(safe_jsonb(pb.value ->> 'value'),jsonb_build_object('value', pb.value ->> 'value')) as val,
+
+        coalesce(safe_jsonb(pb.value ->> 'valueId'),jsonb_build_object('value', pb.value ->> 'valueId')) as valId,
 
         -- safe cpa
         nullif(pb.value ->> 'categorypropertyallocationid','')::int as cpa_id
@@ -38,7 +39,7 @@ BEGIN
         )then 'Resurvey' else 'Fresh MI' end) as remarks
         from base b
         join tblresponselogs r on r.responselogid=b.responselogid
-         join tbl_idatum_crvdetails crv on crv.serialno=b.meter_Id
+         left join tbl_idatum_crvdetails crv on crv.serialno=upper(b.meter_Id)
         left join tblidatum_updatemi_logs um on um.distnid = b.distnid and um.request::jsonb ->> 'serialNumber' = b.meter_Id
         inner join tblusers u on u.userid=r.serveyorid
         where um.request::jsonb ->> 'serialNumber' is null and b.meter_Id <>''
@@ -72,10 +73,19 @@ BEGIN
             filter (where cpa_id in ('203','569','631'))       as termseal2,
 
         max(val ->> 'value')
-            filter (where cpa_id in ('941','797','943'))             as cablelength,
+            filter (where cpa_id in ('941','797','943','941'))             as cablelength,
 
         max(val ->> 'value')
-            filter (where cpa_id in ('674','650'))             as barcode
+            filter (where cpa_id in ('674','650'))             as barcode,
+
+        MAX(coalesce(valId ->> 'valueId',valId::text))
+            FILTER (WHERE cpa_id IN ('2061','1035','2061'))             AS cablename,
+
+        max(val ->> 'value')
+            FILTER (WHERE cpa_id IN ('1776','1520','1667','1966'))             AS oldmetcondition,
+
+        MAX(val ->> 'value')
+            FILTER (WHERE cpa_id IN ('1955'))             AS consumer_status
 
         from base c
         group by c.responselogid
@@ -87,16 +97,16 @@ BEGIN
         left join tblfactoryfiledetails f on f.serial_number = upper(p.meternum)
     ),
      miinsert_cte as(
-        insert into public.tblidatum_updatemi_logs (distnid,distributionnodecode,request,description,type_id)
-        select m.distnid,distcode,jsonb_build_object('serialNumber',meternum, 'meterStatus','10', 'Stock Status','No', 'meterInstalledById',coalescE(meterinstallbyid,''), 'meterInstalledByName',coalescE(meterinstalledby,''), 'meterInstalledDate',coalescE(installation_date::text,'')
-        , 'Id',coalesce(distcode,''), 'oldMeterSerialNumber',coalescE(oldmeternum,barcode,''), 'BodySeal1',coalescE(bodyseal1,''), 'BodySeal2',coalesce(bodyseal2,''), 'BoxSeal1',coalesce(boxseal1,''), 'BoxSeal2',coalesce(boxseal2,''), 'TerminalSeal1',coalesce(termseal1,''), 'TerminalSeal2',coalesce(termseal2,'')
-        , 'smcBoxOEMId',(case when mm.mat_subcategory='SMC Box' then mm.smcbox_oemid else 'NA' end), 'smcBoxSAPId',(case when mm.mat_subcategory='SMC Box' then mm.smcbox_sapid else 'NA' end), 'cableLengthConsumed',coalesce(cablelength,''), 'cableSAPId',(case when mm.mat_subcategory='Service Cable' then mm.smcbox_sapid else 'NA' end), 'cableOEMID',(case when mm.mat_subcategory='Service Cable' then mm.smcbox_oemid else 'NA' end), 'newCT','', 'newCTRatio','', 'SIMNo',coalesce(p.sim_no,''), 'serviceCategory',m.servicecategory,'serviceSubCategory',m.servicesubcategory),m.remarks,106
+        INSERT INTO public.tblidatum_updatemi_logs (distnid,distributionnodecode,request,description,type_id,push_datetime)
+        select  distinct m.distnid,distcode,jsonb_build_object('serialNumber',coalescE(upper(meternum),''), 'meterStatus','10', 'Stock Status','No', 'meterInstalledById',coalescE(meterinstallbyid,''), 'meterInstalledByName',coalescE(meterinstalledby,''), 'meterInstalledDate',coalescE(installation_date::text,'')
+        , 'Id',coalesce(distcode,''), 'oldMeterSerialNumber',coalescE(upper(oldmeternum),upper(barcode),''), 'BodySeal1',coalescE(bodyseal1,''), 'BodySeal2',coalesce(bodyseal2,''), 'BoxSeal1',coalesce(boxseal1,''), 'BoxSeal2',coalesce(boxseal2,''), 'TerminalSeal1',coalesce(termseal1,''), 'TerminalSeal2',coalesce(termseal2,'')
+        , 'smcBoxOEMId',(case when mm.mat_subcategory='SMC Box' then mm.sap_vendor_code else '' end), 'smcBoxSAPId',(case when mm.mat_subcategory='SMC Box' then mm.sap_vendor_oem_name else '' end), 'smcBoxSerialNo','','cableLengthConsumed',coalesce(cablelength,''), 'cableSAPId',(case when mm.mat_subcategory in ('Service Cable','cable') then mm.sap_material_code else '' end), 'cableOEMID',(case when mm.mat_subcategory in ('Service Cable','cable') then mm.sap_vendor_code else '' end), 'oldMeterCondtion',coalesce(case when oldmetcondition in ('OK','Active') then 'Good' else oldmetcondition end,''), 'newCT','', 'newCTRatio','', 'SIMNo',coalesce(p.sim_no,''), 'serviceCategory',m.servicecategory,'serviceSubCategory',m.servicesubcategory, 'otherserializedMaterialConsumed','[]'::jsonb, 'OthernonserializedMaterialConsumed','[]'::jsonb),m.remarks,106,now()
         from pivoted_with_sim p
         join cteamain m on m.responselogid = p.responselogid
-        join tbl_idatum_crvdetails crv on crv.serialno=p.meternum
-        left join se_material_master m1 on m1.name=crv.materialname and m1.code=crv.materialcode
+        left join tbl_idatum_crvdetails crv on crv.serialno=upper(p.meternum)
+        left join se_material_master m1 on m1.short_name=p.cablename
         left join tblidatum_material_master mm on mm.mat_rid=m1.mm_rid
-        where not exists (select 1 from tblidatum_updatemi_logs x where x.distnid = m.distnid and x.status=false)        
+        WHERE (meternum IS NOT NULL OR consumer_status = 'PD') and not exists (select 1 from tblidatum_updatemi_logs x where x.distnid = m.distnid and x.status=false)        
         returning id,request
     )--select * from miinsert_cte
 
@@ -104,4 +114,5 @@ BEGIN
 	from  miinsert_cte;
 
 END;
-$function$
+$BODY$
+  LANGUAGE 'plpgsql' COST 100.0 SECURITY INVOKER

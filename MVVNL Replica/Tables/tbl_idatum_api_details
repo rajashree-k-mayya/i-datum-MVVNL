@@ -1,0 +1,8 @@
+CREATE TABLE public.tbl_idatum_api_details (crvid           serial primary key,
+                                            details         TEXT NULL,
+                                            type            TEXT NULL,
+                                            wh_activity     TEXT NULL,
+                                            createddatetime TIMESTAMP(6) DEFAULT now() NULL,
+                                            response        VARCHAR(500000) NULL,
+                                            status          BOOL DEFAULT false NULL,
+                                            document_number INT8 NULL);

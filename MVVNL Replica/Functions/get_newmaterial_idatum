@@ -1,0 +1,94 @@
+CREATE OR REPLACE FUNCTION get_newmaterial_idatum(in uom varchar, in matcat varchar, in matsubcat varchar, in matname varchar, in matcode varchar, in mat_description varchar, in sap_vendorcode varchar, in sap_oemname varchar, in deliverynoteunit varchar, in unitdesc varchar, in serialised varchar, in hsncode varchar, in sap_mat_code varchar)
+  RETURNS void AS 
+$BODY$ 
+
+DECLARE 
+uomu_grid int4;mcrid int4;mscrid int4;serialflag int4;ug_rid_new int4;uom_rid_new int4;matrid int4;makerid int4;serial_flag_db int4;
+mat_name_db varchar;mc_rid_db int4;msc_rid_db int4;mm_rid_db int4;
+
+BEGIN
+
+insert into assignmentpreelogs(fntext,created) select 'get_newmaterial_idatum'|| $1::text||'/'||$2::text||'/'||$3::text||'/'||$4::text||'/'||$5::text||'/'||$6::text||'/'||$7::text||'/'||$8::text||'/'||$9::text||'/'||$10::text||'/'||$11::text||'/'||$12::text||'/'||$13::text,now();
+
+    select (case when $11='true' then 1 else 0 end) into serialflag;
+    select mc_rid into mcrid from se_mat_category where title=$2;
+    select msc_rid into mscrid from se_mat_sub_category where title=$3;
+
+    if mcrid is null then
+
+        INSERT INTO se_mat_category (title, code, status, created_user_rid, created_datetime) 
+        select matcat,'',1,907,now()
+        returning mc_rid into mcrid;
+
+        INSERT INTO se_mat_sub_category (mc_rid, title, code, status, created_user_rid, created_datetime) 
+        select mcrid,matsubcat,'',1,907,now()
+        returning msc_rid into mscrid;
+    end if;
+
+    if mcrid is not null and mscrid is null then
+
+        INSERT INTO se_mat_sub_category (mc_rid, title, code, status, created_user_rid, created_datetime) 
+        select mcrid,matsubcat,'',1,907,now()
+        returning msc_rid into mscrid;
+    end if;
+
+    if not exists(select 1 from  se_material_master where code=$5) then
+    Begin
+        select ug_rid into uomu_grid from se_uom_group where name=$1;-- uomfruo_rid
+
+        if uomu_grid is null then
+
+            INSERT INTO se_uom_group (name, description, group_rid, status, def_uom_rid) 
+            select uom,'',3,1,1
+            returning ug_rid into uomu_grid;
+
+            INSERT INTO se_uom (name, ug_rid, status, is_whole_number) 
+            select uom,uomu_grid,1,0
+            returning uom_rid into uom_rid_new;
+        end if;
+
+        INSERT INTO se_material_master (name, code, description, uom_group_rid, hsn_code, mc_rid, msc_rid, group_rid, is_set, is_global, serial_flag, status,created_user_rid, created_datetime, code_part_type, has_make, short_name, has_labour, is_box_serial, gst_slab, sgst, cgst, igst, default_uom_rid)
+        select matname,matcode,mat_description,uomu_grid,coalesce($12,''),mcrid,mscrid,3,0,0,serialflag,1,907,now(),0,0,'',0,0,null,0,0,0,uomu_grid
+        returning mm_rid into matrid;
+
+        INSERT INTO public.tblidatum_material_master (mat_rid,sap_vendor_code,sap_vendor_oem_name,mat_subcategory,sap_material_code)
+        select matrid,$7,$8,(select title from se_mat_sub_category where msc_rid=mscrid),$13;
+
+        INSERT INTO se_material_bu_allocation (mm_rid, bu_rid, code, material_price, price_uom_rid, status, created_user_rid, created_datetime) 
+        select matrid,20,matcode,'0.00',0,1,907,now();
+
+        INSERT INTO se_make (mc_rid, msc_rid, make, status, created_user_rid)
+        select mcrid,mscrid,$8,1,907
+        returning make_rid into makerid;
+
+        INSERT INTO se_material_make_map (mat_rid, make_rid) 
+        select matrid,makerid;
+
+
+    End;
+    End if;
+
+    select m.mm_rid,m.serial_flag,name,m.mc_rid,m.msc_rid into mm_rid_db,serial_flag_db,mat_name_db,mc_rid_db,msc_rid_db from se_material_master m where m.code=$5 and m.group_rid=3;
+
+
+    if serialflag<> serial_flag_db then
+
+        if serialflag=1 then
+            update se_material_master  set serial_flag=serialflag,mc_rid=mcrid,msc_rid=mscrid where code=$5;
+        end if;
+    end if;
+
+    if matname is distinct from mat_name_db then
+        update se_material_master set name=matname where mm_rid=mm_rid_db;
+        update tblidatum_material_master set sap_vendor_code=$7,sap_vendor_oem_name=$8,mat_subcategory=$3,sap_material_code=$13 where mat_rid=mm_rid_db;
+    end if;
+
+    if mcrid <> mc_rid_db then
+        update se_material_master set mc_rid=mcrid;
+        update se_material_master set msc_rid=mscrid;
+    end if;
+
+
+END;
+$BODY$
+  LANGUAGE 'plpgsql' COST 100.0 SECURITY INVOKER

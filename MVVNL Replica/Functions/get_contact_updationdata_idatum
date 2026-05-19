@@ -1,7 +1,6 @@
-CREATE OR REPLACE FUNCTION public.get_contact_updationdata_idatum()
- RETURNS void
- LANGUAGE plpgsql
-AS $function$ 
+CREATE OR REPLACE FUNCTION get_contact_updationdata_idatum()
+  RETURNS void AS 
+$BODY$ 
 BEGIN 
 
 with datactea as(
@@ -27,4 +26,5 @@ where (b.roleid<>a.roleid or b.inchargeid<>a.incharge_user_rid);
 
 
 END; 
-$function$
+$BODY$
+  LANGUAGE 'plpgsql' COST 100.0 SECURITY INVOKER

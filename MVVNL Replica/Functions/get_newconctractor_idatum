@@ -1,0 +1,27 @@
+CREATE OR REPLACE FUNCTION get_newconctractor_idatum(in vendorcode varchar, in firmname varchar, in search_term varchar, in mobileno varchar, in address varchar)
+  RETURNS void AS 
+$BODY$ 
+DECLARE contactrid int4;
+BEGIN
+
+insert into assignmentpreelogs(fntext,created) select 'get_newconctractor_idatum'|| $1::text||'/'||$2::text||'/'||$3::text||'/'||$4::text||'/'||$5::text,now();
+
+if not exists(select 1 from  se_contact where firm_name=$2) then
+
+    if not exists(select 1 from se_contact where vendor_code=$1) then
+
+        INSERT INTO se_contact ( firm_name, contact_person, email, mobile, office_contact, address, image_url, group_rid, status, created_user_rid, created_datetime, vendor_code, alternate_contact, website, type_of_org, incharge_user_rid, data_json) 
+        select firmname,search_term,'',mobileno,'',address,'',3,1,907,now(),vendorcode,'','',0,0,'[]'::jsonb
+        returning contact_rid into contactrid;
+
+        INSERT INTO se_contact_category_map (contact_rid, contact_category_index) select contactrid, 753;
+
+    end if;
+
+end if;
+
+
+
+END;
+$BODY$
+  LANGUAGE 'plpgsql' COST 100.0 SECURITY INVOKER

@@ -1,7 +1,6 @@
-CREATE OR REPLACE FUNCTION public.get_contractorcreationdata_idatum()
- RETURNS void
- LANGUAGE plpgsql
-AS $function$ 
+CREATE OR REPLACE FUNCTION get_contractorcreationdata_idatum()
+  RETURNS void AS 
+$BODY$ 
 BEGIN 
 
 insert into tblidatum_contractorcreation_logs (contractorid,roleid,inchargeid,request,description,type_id,inserted)
@@ -20,4 +19,5 @@ where u.companyid=3 and pu.projectid=20 and cm.contact_category_index=753
 
 
 END; 
-$function$
+$BODY$
+  LANGUAGE 'plpgsql' COST 100.0 SECURITY INVOKER

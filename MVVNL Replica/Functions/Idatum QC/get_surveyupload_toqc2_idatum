@@ -147,4 +147,4 @@ GROUP BY t.distnid,t.responselogid,merged_json
 ) as p;
 END;
 $BODY$
-  LANGUAGE 'plpgsql' COST 100.0 SECURITY INVOKER
+  LANGUAGE 'plpgsql' COST 100.0 SECURITY INVOKER;

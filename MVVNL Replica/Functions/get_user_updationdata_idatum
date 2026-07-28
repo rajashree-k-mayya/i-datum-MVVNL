@@ -30,4 +30,4 @@ where (b1.roleid<>u.roleid or b1.contactid<>u.contact_rid) and not exists(select
 
 END; 
 $BODY$
-  LANGUAGE 'plpgsql' COST 100.0 SECURITY INVOKER
+  LANGUAGE 'plpgsql' COST 100.0 SECURITY INVOKER;

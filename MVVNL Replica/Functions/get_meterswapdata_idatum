@@ -33,4 +33,4 @@ where not exists(select 1 from tblidatum_consumerswap_logs cp where cp.distnid=m
 
 END;
 $BODY$
-  LANGUAGE 'plpgsql' COST 100.0 SECURITY INVOKER
+  LANGUAGE 'plpgsql' COST 100.0 SECURITY INVOKER;

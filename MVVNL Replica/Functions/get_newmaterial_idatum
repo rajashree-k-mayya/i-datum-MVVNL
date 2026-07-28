@@ -102,4 +102,4 @@ insert into assignmentpreelogs(fntext,created) select 'get_newmaterial_idatum'||
 */
 END;
 $BODY$
-  LANGUAGE 'plpgsql' COST 100.0 SECURITY INVOKER
+  LANGUAGE 'plpgsql' COST 100.0 SECURITY INVOKER;

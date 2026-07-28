@@ -28,4 +28,4 @@ where not exists(select 1 from  tblidatum_usercreation_logs where status_created
 
 END; 
 $BODY$
-  LANGUAGE 'plpgsql' COST 100.0 SECURITY INVOKER
+  LANGUAGE 'plpgsql' COST 100.0 SECURITY INVOKER;

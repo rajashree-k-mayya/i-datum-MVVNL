@@ -20,4 +20,4 @@ where u.companyid=3 and pu.projectid=20 and cm.contact_category_index=753
 
 END; 
 $BODY$
-  LANGUAGE 'plpgsql' COST 100.0 SECURITY INVOKER
+  LANGUAGE 'plpgsql' COST 100.0 SECURITY INVOKER;

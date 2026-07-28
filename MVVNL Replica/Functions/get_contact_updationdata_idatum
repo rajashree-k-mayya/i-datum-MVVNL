@@ -27,4 +27,4 @@ where (b.roleid<>a.roleid or b.inchargeid<>a.incharge_user_rid);
 
 END; 
 $BODY$
-  LANGUAGE 'plpgsql' COST 100.0 SECURITY INVOKER
+  LANGUAGE 'plpgsql' COST 100.0 SECURITY INVOKER;

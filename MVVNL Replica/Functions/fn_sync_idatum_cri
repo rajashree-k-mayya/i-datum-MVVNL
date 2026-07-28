@@ -52,4 +52,4 @@ if ($11 = 'non-serialized' and not exists(select 1 from tbl_idatum_cridetails a 
 end if;
 END;
 $BODY$
-  LANGUAGE 'plpgsql' COST 100.0 SECURITY INVOKER
+  LANGUAGE 'plpgsql' COST 100.0 SECURITY INVOKER;

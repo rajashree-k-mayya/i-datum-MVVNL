@@ -20,9 +20,6 @@ insert into assignmentpreelogs(fntext,created) select 'get_newmaterial_idatum'||
         select matcat,'',1,907,now()
         returning mc_rid into mcrid;
 
-        INSERT INTO se_mat_sub_category (mc_rid, title, code, status, created_user_rid, created_datetime) 
-        select mcrid,matsubcat,'',1,907,now()
-        returning msc_rid into mscrid;
     end if;
 
     if mcrid is not null and mscrid is null then
@@ -31,6 +28,9 @@ insert into assignmentpreelogs(fntext,created) select 'get_newmaterial_idatum'||
         select mcrid,matsubcat,'',1,907,now()
         returning msc_rid into mscrid;
     end if;
+
+    PERFORM pg_advisory_xact_lock(hashtext(matcode));
+
 
     if not exists(select 1 from  se_material_master where code=$5) then
     Begin
@@ -57,17 +57,27 @@ insert into assignmentpreelogs(fntext,created) select 'get_newmaterial_idatum'||
         INSERT INTO se_material_bu_allocation (mm_rid, bu_rid, code, material_price, price_uom_rid, status, created_user_rid, created_datetime) 
         select matrid,20,matcode,'0.00',0,1,907,now();
 
-        INSERT INTO se_make (mc_rid, msc_rid, make, status, created_user_rid)
-        select mcrid,mscrid,$8,1,907
-        returning make_rid into makerid;
+        if exists(select 1 from se_make where make=trim($8)) then
 
-        INSERT INTO se_material_make_map (mat_rid, make_rid) 
-        select matrid,makerid;
+            select make_rid into makerid from se_make where make=trim($8);
+        else
+            INSERT INTO se_make (mc_rid, msc_rid, make, status, created_user_rid)
+            select mcrid,mscrid,trim($8),1,907
+            returning make_rid into makerid;
+        end if;
+
+        if makerid is not null then
+
+            INSERT INTO se_material_make_map (mat_rid, make_rid) 
+            select matrid,makerid;
+            
+            update se_material_master set has_make=1 where mm_rid=matrid;
+        end if;
 
 
     End;
     End if;
-
+/*
     select m.mm_rid,m.serial_flag,name,m.mc_rid,m.msc_rid into mm_rid_db,serial_flag_db,mat_name_db,mc_rid_db,msc_rid_db from se_material_master m where m.code=$5 and m.group_rid=3;
 
 
@@ -77,18 +87,19 @@ insert into assignmentpreelogs(fntext,created) select 'get_newmaterial_idatum'||
             update se_material_master  set serial_flag=serialflag,mc_rid=mcrid,msc_rid=mscrid where code=$5;
         end if;
     end if;
+*/
 
-    if matname is distinct from mat_name_db then
+ /*   if matname is distinct from mat_name_db then
         update se_material_master set name=matname where mm_rid=mm_rid_db;
         update tblidatum_material_master set sap_vendor_code=$7,sap_vendor_oem_name=$8,mat_subcategory=$3,sap_material_code=$13 where mat_rid=mm_rid_db;
     end if;
 
     if mcrid <> mc_rid_db then
-        update se_material_master set mc_rid=mcrid;
-        update se_material_master set msc_rid=mscrid;
+        update se_material_master set mc_rid=mcrid where mm_rid=mm_rid_db;
+        update se_material_master set msc_rid=mscrid where mm_rid=mm_rid_db;
     end if;
 
-
+*/
 END;
 $BODY$
   LANGUAGE 'plpgsql' COST 100.0 SECURITY INVOKER

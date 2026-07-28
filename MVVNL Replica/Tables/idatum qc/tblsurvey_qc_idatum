@@ -1,0 +1,6 @@
+
+CREATE TABLE public.tblsurvey_qc_idatum (sqcid         serial primary key,
+                                         responselogid INT4 NULL,
+                                         distnid       INT4 NULL,
+                                         activityid    INT4 NULL,
+                                         apipushed     BOOL DEFAULT false NULL);

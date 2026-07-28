@@ -1,0 +1,9 @@
+CREATE TABLE public.tblsurvey_qc1_approved_idatum (qcaid            serial primary key,
+                                                   responselogid    INT4 NULL,
+                                                   distnid          INT4 NULL,
+                                                   activityid       INT4 NULL,
+                                                   responsestatusid INT4 NULL,
+                                                   approved_userid  INT4 NULL,
+                                                   createddatetime  TIMESTAMP(6) DEFAULT now() NULL,
+                                                   deleted          BOOL DEFAULT false NULL);
+

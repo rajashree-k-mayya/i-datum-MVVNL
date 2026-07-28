@@ -1,0 +1,150 @@
+CREATE OR REPLACE FUNCTION get_surveyupload_toqc2_idatum()
+  RETURNS TABLE (distnid int4, responselogid int4, json text) AS 
+$BODY$
+BEGIN
+RETURN QUERY 
+SELECT * from(
+WITH apipushed AS (
+  SELECT a.responselogid FROM tblidatum_surveytoqc_pushlogs a WHERE status='Success'
+),
+base AS (
+    SELECT a.distnid, a.responselogid, b.distcode, b.activityid,b.nodetype, f.location, e.username, b.serveyorid, b.locationid
+    FROM tblsurvey_qc_idatum a
+    JOIN tblresponselogs b ON b.responselogid = a.responselogid
+    JOIN tblusers e ON e.userid = b.serveyorid
+    JOIN tblofficelocationallocation f ON f.officelocationallocationid = b.locationid
+    LEFT JOIN apipushed g ON g.responselogid = a.responselogid
+    WHERE g.responselogid IS NULL AND a.apipushed = false AND a.activityid NOT IN (10,11,12,86) and b.projectid=19 and b.responsestatusid>=0
+),
+parsed_response AS (
+    SELECT b.responselogid,x.categorypropertyallocationid,(case when x.categorypropertyallocationid in (16,212,1192) and x.value ilike '%mobile_number%' then x.value::jsonb->>'mobile_number' else x.value end) value
+    FROM tblresponselogs b
+    JOIN base bs ON bs.responselogid = b.responselogid
+    CROSS JOIN LATERAL jsonb_to_recordset(b.response::jsonb->'propertiesBean') AS x(categorypropertyallocationid int, value text)
+)
+,meter_data AS (
+SELECT 
+    b.responselogid,MAX(CASE WHEN categorypropertyallocationid IN (57,552,624) then (case when value like '%meter_Id%' then value::jsonb->>'meter_Id' else value end) end) as new_meter,
+   MAX(CASE WHEN categorypropertyallocationid IN (176,530,602,674) then (case when value like '%meter_Id%' then value::jsonb->>'meter_Id' else value end) end) as old_meter
+  FROM parsed_response b
+  where categorypropertyallocationid in(57, 552, 624,176,530,602,674)
+  GROUP BY b.responselogid
+),
+mapped AS (
+    SELECT b.distnid, b.responselogid, b.distcode, b.activityid,b.nodetype, b.location, b.username,
+   d.propertyvalue,d.sub_category,d.parent_category,COALESCE(pr.value,pr2.value, d.default_value, '') AS value
+   FROM base b
+   JOIN tblsurvey_propertymapping_idatum d ON d.activityid = b.activityid AND d.include_in_payload = true
+   left JOIN parsed_response pr ON pr.responselogid = b.responselogid
+   AND pr.categorypropertyallocationid IN (SELECT categorypropertyallocationid FROM tblcategorypropertyallocation c WHERE c.propertyid = d.propertyid and c.categorypropertyallocationid=d.cprid)
+     LEFT JOIN parsed_response pr2 ON pr2.responselogid = b.responselogid AND
+      pr2.categorypropertyallocationid IN (SELECT categorypropertyallocationid FROM tblcategorypropertyallocation c WHERE c.categorypropertyallocationid = d.fallback_cprid::int )
+),
+location_hierarchy AS (
+    WITH RECURSIVE loc AS (
+        SELECT b.responselogid,c.officelocationallocationid,c.location,c.officetypeid,c.underlocationid
+        FROM base b
+        JOIN tblofficelocationallocation c ON c.officelocationallocationid = b.locationid
+        UNION ALL
+        SELECT l.responselogid,p.officelocationallocationid,p.location,p.officetypeid,p.underlocationid
+        FROM tblofficelocationallocation p
+        JOIN loc l ON l.underlocationid = p.officelocationallocationid
+    )
+    SELECT * FROM loc
+),
+distribution_tree AS (
+    WITH RECURSIVE loc AS (
+        SELECT b.responselogid,c.distributionnodeid,c.distributionnodecode,c.distributionnodename,c.underdistributionnodeid,c.distributionnodetypeid
+        FROM base b
+        JOIN tbldistributionnodes c ON c.distributionnodeid = b.distnid
+        UNION ALL
+        SELECT l.responselogid,p.distributionnodeid,p.distributionnodecode,p.distributionnodename,p.underdistributionnodeid,p.distributionnodetypeid
+        FROM tbldistributionnodes p
+        JOIN loc l ON l.underdistributionnodeid = p.distributionnodeid
+    )
+    SELECT * FROM loc
+),
+
+location_mapped AS (
+--    SELECT b.responselogid,hm.parent_category,hm.key_valu,coalesce(lh.location,default_value) AS value
+--    FROM  base b
+--    LEFT JOIN tbl_heirarchy_mapping hm ON hm.sub_category = 'location_hierarchy' AND hm.include_in_payload = true
+--    left JOIN location_hierarchy lh ON hm.office_nodetye_id = lh.officetypeid and lh.responselogid=b.responselogid
+--    UNION ALL
+    SELECT b.responselogid,hm.parent_category,hm.key_valu,sub_category,b.distnid,b.distcode,b.nodetype,b.location,b.username,b.activityid,
+    coalesce((CASE WHEN hm.key_valu IN ('substation_name','feeder_name','dtr_name','dt_name')THEN dt.distributionnodename
+         WHEN hm.key_valu IN ('substation_code','feeder_code','dtr_code','dt_code') THEN dt.distributionnodecode END),hm.default_value) value
+     FROM base b
+   LEFT JOIN tbl_heirarchy_mapping_idatum hm on hm.include_in_payload = true and b.activityid=hm.activityid
+  LEFT JOIN distribution_tree dt ON dt.responselogid = b.responselogid AND hm.office_nodetye_id = dt.distributionnodetypeid
+  where hm.activityid in (71,72,43,44,3,45,46,81)
+),
+
+location_json AS (
+SELECT t.responselogid,t.parent_category,jsonb_object_agg(t.key_name, t.value_json) location_hierarchy,t.distnid,t.distcode,t.nodetype,t.location,t.username,activityid from (
+  SELECT f.responselogid,f.parent_category,f.sub_category AS key_name,jsonb_object_agg(f.key_valu, f.value) AS value_json,f.distnid,f.distcode,f.nodetype,f.location,f.username,activityid
+  FROM location_mapped f
+  WHERE f.sub_category IS NOT NULL
+  GROUP BY f.parent_category,f.responselogid,f.sub_category,f.distnid,f.distcode,f.nodetype,f.location,f.username,activityid
+  UNION ALL
+  SELECT f.responselogid,f.parent_category,f.key_valu AS key_name,to_jsonb(f.value) AS value_json,f.distnid,f.distcode,f.nodetype,f.location,f.username,activityid
+  FROM location_mapped f
+  WHERE f.sub_category IS NULL
+) as t
+GROUP BY t.responselogid,t.parent_category,t.distnid,t.distcode,t.nodetype,t.location,t.username,activityid
+),
+final AS (
+  SELECT t.distnid,t.responselogid,t.distcode,t.activityid,t.nodetype,t.location,t.username,coalesce(t.parent_category,lj.parent_category) parent_category,
+         jsonb_object_agg(t.key_name, t.value_json)|| COALESCE(lj.location_hierarchy, '{}'::jsonb)
+AS grp_json from (
+  SELECT f.distnid,f.responselogid,f.distcode,f.activityid,f.nodetype,f.location,f.username,f.parent_category,f.sub_category AS key_name,jsonb_object_agg(f.propertyvalue, f.value) AS value_json
+  FROM mapped f
+  WHERE f.sub_category IS NOT NULL
+  GROUP BY f.distnid,f.responselogid,f.distcode,f.activityid,f.nodetype,f.location,f.username,f.parent_category,f.sub_category
+  UNION ALL
+  SELECT f.distnid,f.responselogid,f.distcode,f.activityid,f.nodetype,f.location,f.username,f.parent_category,f.propertyvalue AS key_name,to_jsonb(f.value) AS value_json
+  FROM mapped f
+  WHERE f.sub_category IS NULL
+) as t
+left  JOIN location_json lj ON lj.responselogid = t.responselogid AND lj.parent_category = t.parent_category
+GROUP BY t.distnid,t.responselogid,t.distcode,t.activityid,t.nodetype,t.location,t.username,t.parent_category,lj.parent_category,lj.location_hierarchy
+
+union
+
+SELECT t.distnid,t.responselogid,t.distcode,t.activityid,t.nodetype,t.location,t.username,t.parent_category,t.location_hierarchy
+from location_json t
+left join mapped f on t.responselogid=f.responselogid and t.parent_category=f.parent_category
+where f.responselogid is null
+)
+,final2 as (select t.responselogid,distcode, activityid,nodetype,location,username,t.distnid,jsonb_object_agg(t.parent_category, t.grp_json)filter(where t.parent_category is not null) grp_json from final t where t.parent_category is not null
+group by t.responselogid,distcode,activityid,nodetype,location,username,t.distnid
+union 
+select a.responselogid,distcode, activityid,nodetype,location,username,a.distnid,grp_json from final a where  parent_category is null),
+final_merge AS (
+    SELECT t.responselogid,distcode,activityid,nodetype,location,username,t.distnid,jsonb_strip_nulls(jsonb_object_agg(key, value)) AS merged_json
+FROM (SELECT final2.responselogid,distcode,activityid,nodetype,location,username,final2.distnid,key,value FROM final2 , LATERAL jsonb_each(grp_json)) t
+    GROUP BY t.responselogid,distcode,activityid,nodetype,location,username,t.distnid
+)
+SELECT
+  t.distnid,
+  t.responselogid,
+  json_build_object(
+    'reference_id',MAX(t.distcode),
+    'reference_type',MAX(CASE WHEN t.activityid in (71,81,72) THEN 'CMI'  WHEN t.activityid=3 THEN 'NSC' WHEN t.activityid in (43,45) THEN 'CI' WHEN t.activityid in (44,46) THEN 'MI' END),
+    'reference_category',MAX(CASE WHEN t.nodetype=1 THEN 'Consumer' WHEN t.nodetype=6 THEN 'Feeder' WHEN t.nodetype=7 THEN 'DT' END),
+    'source','Styra',
+    'remarks','any remarks',
+    'is_qc_bypass',true,
+    'meter_number',coalesce(max((case when t.activityid in (71,43,45) then b.old_meter else b.new_meter end)),''),
+    'subdivision',MAX(t.location),
+    'surveyor_name',MAX(t.username),
+    'timestamp',to_char(now(),'YYYY-MM-DD HH24:MI:SS'),
+  'payload',merged_json
+  )::text
+FROM final_merge t
+left  join meter_data b on b.responselogid=t.responselogid
+GROUP BY t.distnid,t.responselogid,merged_json
+) as p;
+END;
+$BODY$
+  LANGUAGE 'plpgsql' COST 100.0 SECURITY INVOKER

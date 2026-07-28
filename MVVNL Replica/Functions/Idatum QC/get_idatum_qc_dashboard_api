@@ -1,0 +1,130 @@
+CREATE OR REPLACE FUNCTION get_idatum_qc_dashboard_api(in "zone" varchar, in circle varchar, in division varchar, in subdivision varchar)
+  RETURNS TABLE (result jsonb) AS 
+$BODY$
+DECLARE
+subdivision int[];
+BEGIN
+
+insert into assignmentpreelogs(fntext,created) select 'get_idatum_qc_dashboard_api'|| coalesce($1,'')::text||'/'||coalesce($2,'')::text||'/'||coalesce($3,'')::text||'/'||coalesce($4,'')::text,now();
+
+
+if $4 is not null and $4<>'' and exists(select 1 from tblofficelocationallocation where location=$4 and officetypeid=4 and bu_rid=19) then
+    select array_agg(officelocationallocationid) into subdivision from tblofficelocationallocation where location=$4 and bu_rid=19;
+
+elsif $3 is not null and $3<>'' and exists(select 1 from tblofficelocationallocation where location=$3 and officetypeid=3 and bu_rid=19) then
+    select array_agg(b.officelocationallocationid) into subdivision from tblofficelocationallocation a
+    join tblofficelocationallocation b on b.underlocationid=a.officelocationallocationid
+    where a.location=$3 and a.bu_rid=19;
+
+elsif $2 is not null and $2<>'' and exists(select 1 from tblofficelocationallocation where location=$2 and officetypeid=2 and bu_rid=19) then
+    select array_agg(c.officelocationallocationid) into subdivision from tblofficelocationallocation a
+    join tblofficelocationallocation b on b.underlocationid=a.officelocationallocationid
+    join tblofficelocationallocation c on c.underlocationid=b.officelocationallocationid
+     where location=$2 and bu_rid=19;
+end if;
+
+RETURN QUERY
+WITH cnt as (
+    select
+        activityid,
+        count(*) FILTER (where responsestatusid in(0,2) and nextapproverroleid = 11) as qc1_pending
+        
+    from tblresponselogs b
+    join tblofficelocationallocation p on p.officelocationallocationid=b.locationid
+         where responsestatusid>=0 and projectid=19 and
+         activityid in (3,71,72,43,44,45,46) and b.locationid=ANY(subdivision)
+    group by activityid
+)
+, 
+total_survey as
+(
+select distinct responselogid,activityid from etl_dashboardcount
+where locationid=ANY(subdivision) group by responselogid,activityid
+)
+,
+qc1_approved as(
+--select distinct responselogid,activityid from tblsurvey_qc1_approved_idatum where deleted=false group by responselogid,activityid
+
+select max(tblapprovallogid) as responselogid,r.activityid from tblapprovallogs a
+join etl_dashboardcount r on r.responselogid=a.responselogid
+where r.responsestatusid>=0 and r.projectid=19 and a.statusid=5 and r.locationid=ANY(subdivision)
+group by a.responselogid,r.activityid
+)
+
+select jsonb_build_object(
+    'data',
+    jsonb_build_array(
+        jsonb_build_object(
+            'type','Survey',
+            'categories',
+            jsonb_build_array(
+
+                jsonb_build_object(
+                    'name','Consumer',
+                    'total_eligible',coalesce((select count(distinct responselogid)  from total_survey where activityid=71),0),
+                    'qc1_pending',
+                        coalesce((select qc1_pending from cnt where activityid = 71),0),
+                    'qc1_approved',
+                        coalesce((select count(responselogid) from qc1_approved where activityid = 71),0)
+                ),
+
+                jsonb_build_object(
+                    'name','DT',
+                    'total_eligible',coalesce((select count(distinct responselogid)  from total_survey where activityid=43),0),
+                    'qc1_pending',
+                        coalesce((select qc1_pending from cnt where activityid = 43),0),
+                    'qc1_approved',
+                        coalesce((select count(responselogid) from qc1_approved where activityid = 43),0)
+                ),
+
+                jsonb_build_object(
+                    'name','Feeder',
+                    'total_eligible',coalesce((select count(distinct responselogid)  from total_survey where activityid=45),0),
+                    'qc1_pending',
+                        coalesce((select qc1_pending from cnt where activityid = 45),0),
+                    'qc1_approved',
+                        coalesce((select count(responselogid) from qc1_approved where activityid = 45),0)
+                )
+            )
+        ),
+        jsonb_build_object(
+            'type','MI',
+            'categories',
+            jsonb_build_array(
+
+                jsonb_build_object(
+                    'name','Consumer',
+                    'total_eligible',coalesce((select count(distinct responselogid)  from total_survey where activityid in (3,72)),0),
+                    'qc1_pending',
+                        coalesce(
+                            (select SUM(qc1_pending) from cnt where activityid in (3,72)),0),
+                    'qc1_approved',
+                        coalesce(
+                            (select count(responselogid) from qc1_approved where activityid in  (3,72)),0)
+                ),
+
+                jsonb_build_object(
+                    'name','DT',
+                    'total_eligible',coalesce((select count(distinct responselogid)  from total_survey where activityid=44),0),
+                    'qc1_pending',
+                        coalesce((select qc1_pending from cnt where activityid = 44),0),
+                    'qc1_approved',
+                        coalesce((select count(responselogid) from qc1_approved where activityid = 44),0)
+                ),
+
+                jsonb_build_object(
+                    'name','Feeder',
+                    'total_eligible',coalesce((select count(distinct responselogid)  from total_survey where activityid=46),0),
+                    'qc1_pending',
+                        coalesce((select qc1_pending from cnt where activityid = 46),0),
+                    'qc1_approved',
+                        coalesce((select count(responselogid) from qc1_approved where activityid = 46),0)
+                )
+            )
+        )
+    )
+) as result;
+
+END;
+$BODY$
+  LANGUAGE 'plpgsql' COST 100.0 SECURITY INVOKER

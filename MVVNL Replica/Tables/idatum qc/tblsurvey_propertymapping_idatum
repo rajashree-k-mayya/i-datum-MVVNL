@@ -1,0 +1,12 @@
+CREATE TABLE public.tblsurvey_propertymapping_idatum (pmid                   serial primary key,
+                                                      propertyid             INT4 NULL,
+                                                      propertyvalue          TEXT NULL,
+                                                      activityid             INT4 NULL,
+                                                      parent_category        TEXT NULL,
+                                                      sub_category           TEXT NULL,
+                                                      include_in_payload     BOOL DEFAULT false NULL,
+                                                      default_value          TEXT DEFAULT ''::text NULL,
+                                                      fallback_cprid         TEXT NULL,
+                                                      default_value_datatype TEXT NULL,
+                                                      cprid                  INT4 NULL,
+                                                      correct_property_name  TEXT NULL);

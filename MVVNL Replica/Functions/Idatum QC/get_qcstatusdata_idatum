@@ -1,0 +1,127 @@
+CREATE OR REPLACE FUNCTION get_qcstatusdata_idatum(in request varchar)
+  RETURNS void AS 
+$BODY$
+declare requetsdata record;actvity int4;respid int4;user_id int4;nodetye int4;respstatuidmi record;maxid_in int4;
+BEGIN
+
+insert into assignmentpreelogs (fntext,created) select 'get_qcstatusdata_idatum'||'/'||$1::varchar,now();
+
+
+select $1::jsonb->>'reference_code' as reference_no,
+$1::jsonb->>'qc_status' as qc_status,
+$1::jsonb->>'reference_type' as reference_type,
+$1::jsonb->>'approver_id' as approver,
+$1::jsonb->>'approver_name' as approvername,
+$1::jsonb->>'timestamp' as approveddatetime,
+$1::jsonb->>'qc_remarks' as qc_remarks
+into requetsdata;
+
+
+actvity=(case when requetsdata.reference_type='CI' then 71 when requetsdata.reference_type='MI' then 72 when requetsdata.reference_type='NSC' then 3 when requetsdata.reference_type='CMI' then 81 when requetsdata.reference_type='DT MI' then 44
+when requetsdata.reference_type='DT Survey' then 43 when requetsdata.reference_type='Feeder Survey' then 45 when requetsdata.reference_type='Feeder MI' then 46 end);
+
+nodetye=(case when actvity in (71,72,3) then 1 when actvity in (43,44) then 7 when actvity in (45,46) then 6 end);
+
+
+select max(responselogid) into respid from tblresponselogs
+ where distcode=requetsdata.reference_no and projectid=19 and activityid=actvity and activityid<>81 and responsestatusid>=0 and resurvey=0 limit 1;
+
+
+if not exists(select 1 from tblusers where username=requetsdata.approver) then
+    INSERT INTO tblusers ( username,"FirstName", active, createduserid, status, created_user_rid, created_datetime,  cur_bu_rid,companyid) 
+    select requetsdata.approver,requetsdata.approvername,'1',907,1,907,now(),19,3
+    returning userid INTO user_id;
+else
+    select userid into user_id from tblusers where username=requetsdata.approver limit 1;
+
+end if;
+
+
+if requetsdata.qc_status='Approved' and not exists(select 1 from tblresponselogs where responselogid=respid and responsestatusid=1) then 
+
+
+if (actvity=72) then 
+begin
+
+  
+    select responselogid into maxid_in  from tblresponselogs where distcode=requetsdata.reference_no
+     and projectid=19 and activityid in (71) and responsestatusid>=0 
+   order by responselogid desc limit 1 ;
+
+       select responsestatusid,responselogid  from tblresponselogs
+     where responselogid=maxid_in and projectid=19 and activityid=71  and responsestatusid>=0 and nextapproverroleid=0 and resurvey=0 limit 1  into respstatuidmi;
+
+     if(respstatuidmi.responsestatusid<>1) then
+      Begin
+        update tblresponselogs set responsestatusid=1,nextapproverroleid=0,approved=1,appoveddate = to_char(now()::date, 'DD/MM/YYYY'),approverid=user_id  
+        where  responselogid=respstatuidmi.responselogid and activityid=71;
+        update tblresponselogs set responsestatusid=1,nextapproverroleid=0,approved=1,appoveddate = to_char(now()::date, 'DD/MM/YYYY'),approverid=user_id  
+        where  responselogid=respid and activityid=72;
+
+         insert into tblapprovallogs(responselogid,logtime,userid,statusid,remarks)
+         select respstatuidmi.responselogid,now(),user_id,1,'Auto Approved-Idatum';
+
+         insert into tblapprovallogs(responselogid,logtime,userid,statusid,remarks)
+         select respid,now(),user_id,1,requetsdata.qc_remarks;
+      end;
+      elsif(respstatuidmi.responsestatusid=1) then
+      Begin
+
+        update tblresponselogs set responsestatusid=1,nextapproverroleid=0,approved=1,appoveddate = to_char(now()::date, 'DD/MM/YYYY'),approverid=user_id  
+        where  responselogid=respid and activityid=72;
+
+         insert into tblapprovallogs(responselogid,logtime,userid,statusid,remarks)
+         select respid,now(),user_id,1,requetsdata.qc_remarks;
+      end;
+      end if ;
+
+
+end;
+else
+begin
+    update tblresponselogs set responsestatusid=1,nextapproverroleid=0,approved=1,appoveddate = to_char(requetsdata.approveddatetime::date, 'DD/MM/YYYY'),approverid=user_id  where  responselogid=respid and activityid=actvity;
+   
+     insert into tblapprovallogs(responselogid,logtime,userid,statusid,remarks)
+     select respid,now(),user_id,1,requetsdata.qc_remarks;
+end;
+end if;
+
+
+ update tbldistributionnodes set lastactivityid=(case when actvity=71 then 81 when  actvity=43 then 44 when actvity=45 then 46 else -1 end) where distributionnodecode=requetsdata.reference_no and distributionnodetypeid=nodetye;
+
+ perform sp_processresponse_1(19,nodetye,actvity,respid);
+
+elsif requetsdata.qc_status='Rejected' and  not exists(select 1 from tblresponselogs where responselogid=respid and responsestatusid=1) then 
+
+if (actvity=81) then 
+begin
+
+select max(responselogid) into respid from tblresponselogs where distcode=requetsdata.reference_no and projectid=19 and activityid=72 and responsestatusid=0 and nextapproverroleid=0  and resurvey=0 limit 1;
+
+
+    update tblresponselogs set responsestatusid=2,nextapproverroleid=11,rejected=1  
+    where  responselogid=respid and activityid=72;
+
+     insert into tblapprovallogs(responselogid,logtime,userid,statusid,remarks)
+     select respid,now(),user_id,2,requetsdata.qc_remarks;
+
+end;
+else
+begin
+ update tblresponselogs set responsestatusid=2,nextapproverroleid=11,rejected=1  where  responselogid=respid and activityid=actvity;
+   
+     insert into tblapprovallogs(responselogid,logtime,userid,statusid,remarks)
+     select respid,now(),user_id,2,requetsdata.qc_remarks;
+end;
+end if;
+
+ perform sp_processresponse_1(19,nodetye,actvity,respid);
+
+
+
+end if;
+
+
+END;
+$BODY$
+  LANGUAGE 'plpgsql' COST 100.0 SECURITY INVOKER

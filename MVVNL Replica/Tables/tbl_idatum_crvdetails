@@ -14,3 +14,6 @@ CREATE TABLE public.tbl_idatum_crvdetails (crvid           serial primary key,
                                            type            TEXT NULL,
                                            wh_activity     TEXT NULL,
                                            createddatetime TIMESTAMP(6) DEFAULT now() NULL);
+
+CREATE INDEX idx1_materialcode_1 ON public.tbl_idatum_crvdetails (materialcode);
+CREATE INDEX idx1_serialno_1 ON public.tbl_idatum_crvdetails (serialno);

@@ -1,0 +1,10 @@
+CREATE TABLE public.tblidatum_surveytoqc_pushlogs (id              serial primary key,
+                                                   distnid         INT4 NULL,
+                                                   responselogid   INT4 NULL,
+                                                   request         TEXT NULL,
+                                                   response        VARCHAR NULL,
+                                                   status          TEXT NULL,
+                                                   typeid          INT4 NULL,
+                                                   source          TEXT NULL,
+                                                   updateddatetime TIMESTAMP(6) DEFAULT now() NULL,
+                                                   reference_type  TEXT NULL);

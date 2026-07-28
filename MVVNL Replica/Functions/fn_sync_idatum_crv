@@ -20,9 +20,9 @@ else
 end if;
 */
 
-select mm_rid::int4 into matrid from se_material_master where code=materialcode;
+select mm_rid::int4 into matrid from se_material_master where code=materialcode and group_rid=3;
 
-select contact_rid::int4 into contrid from se_contact where vendor_code=contractorcode;
+select contact_rid::int4 into contrid from se_contact where vendor_code=contractorcode and group_rid=3;
 
 select stock_rid,mat_rid into stockid, matid from se_stock where mat_rid=matrid and holder_rid=contrid and stock_condition_index=800;
 

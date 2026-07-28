@@ -1,0 +1,8 @@
+CREATE TABLE public.tbl_heirarchy_mapping_idatum (id                 serial primary key,
+                                                  office_nodetye_id  INT4 NULL,
+                                                  key_valu           TEXT NULL,
+                                                  parent_category    TEXT NULL,
+                                                  sub_category       TEXT NULL,
+                                                  include_in_payload BOOL DEFAULT true NULL,
+                                                  activityid         INT4 NULL,
+                                                  default_value      TEXT NULL);

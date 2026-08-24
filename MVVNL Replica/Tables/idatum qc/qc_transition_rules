@@ -1,0 +1,20 @@
+CREATE TABLE public.qc_transition_rules (rule_id                serial primary key,
+                                         current_reference_type VARCHAR(50) NULL,
+                                         next_reference_type    VARCHAR(50) NOT NULL,
+                                         is_active              BOOL DEFAULT false NULL);
+
+CREATE INDEX idx_transition_next ON public.qc_transition_rules (next_reference_type, current_reference_type);
+CREATE UNIQUE INDEX qc_transition_rules_current_reference_type_next_reference_t_key ON public.qc_transition_rules (current_reference_type, next_reference_type);
+
+
+INSERT INTO qc_transition_rules (rule_id, current_reference_type, next_reference_type, is_active) VALUES (1, null, 'CI', 'true');
+INSERT INTO qc_transition_rules (rule_id, current_reference_type, next_reference_type, is_active) VALUES (2, null, 'MI', 'true');
+INSERT INTO qc_transition_rules (rule_id, current_reference_type, next_reference_type, is_active) VALUES (3, null, 'DT Survey', 'true');
+INSERT INTO qc_transition_rules (rule_id, current_reference_type, next_reference_type, is_active) VALUES (4, null, 'Feeder Survey', 'true');
+INSERT INTO qc_transition_rules (rule_id, current_reference_type, next_reference_type, is_active) VALUES (5, 'CI', 'MI', 'false');
+INSERT INTO qc_transition_rules (rule_id, current_reference_type, next_reference_type, is_active) VALUES (6, 'CI', 'CMI', 'false');
+INSERT INTO qc_transition_rules (rule_id, current_reference_type, next_reference_type, is_active) VALUES (7, 'DT Survey', 'DT MI', 'true');
+INSERT INTO qc_transition_rules (rule_id, current_reference_type, next_reference_type, is_active) VALUES (8, 'Feeder Survey', 'Feeder MI', 'true');
+INSERT INTO qc_transition_rules (rule_id, current_reference_type, next_reference_type, is_active) VALUES (9, null, 'NSC', 'true');
+INSERT INTO qc_transition_rules (rule_id, current_reference_type, next_reference_type, is_active) VALUES (10, null, 'CMI', 'true');
+

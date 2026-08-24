@@ -1,104 +1,131 @@
-CREATE OR REPLACE FUNCTION get_updatemeter_details_idatum_repush2()
+CREATE OR REPLACE FUNCTION get_updatemeter_details_idatum_repush()
   RETURNS TABLE (respid int4, url text, json1 json, codepart int4) AS 
 $BODY$
 
 BEGIN
 	return query
-    with micte as(
-    select responselogid,distributionnodeid as distnid,_57,_354,_68,_359,_70,_71,_67,_203,_941,_355,_2061,_53 from etl_midata r
-    where not exists (select 1 from tblidatum_updatemi_logs x where x.distnid = r.distributionnodeid and x.status = false and x.type_id = 106)
+    with missing_dist as (
+        select r.responselogid, r.distnid, r.response
+        from tblresponselogs r
+        where r.projectid = 19 and r.responsestatusid >= 0 and r.activityid not in (-1) and r.response is not null
+        and r.response <> '' and r.response like '{%'
+        and not exists (select 1 from tblidatum_updatemi_logs x where x.distnid = r.distnid and x.status = false and x.type_id = 106)
+    )
+    , base as (
+        select m.distnid,m.responselogid,
+        -- safe meter extraction
+        case when safe_jsonb(pb.value ->> 'value') is not null then safe_jsonb(pb.value ->> 'value') ->> 'meter_Id'
+        else pb.value ->> 'value' end as meter_Id,
 
-    ),
-    nsccte as(
-    select responselogid,distributionnodeid,_57,_68,_359,_70,_71,_941,_2061 from etl_nscdata r
-    where not exists (select 1 from tblidatum_updatemi_logs x where x.distnid = r.distributionnodeid and x.status = false and x.type_id = 106)
+        -- safe full value extraction
+        coalesce(safe_jsonb(pb.value ->> 'value'),jsonb_build_object('value', pb.value ->> 'value')) as val,
 
-    ),
-    dtmicte as (
-    select responselogid,distnid,_908,_530,_956,_958,_575,_576,_568,_569,_943,_674 from etl_dtmi r
-    where not exists (select 1 from tblidatum_updatemi_logs x where x.distnid = r.distnid and x.status = false and x.type_id = 106)
+        coalesce(safe_jsonb(pb.value ->> 'valueId'),jsonb_build_object('value', pb.value ->> 'valueId')) as valId,
 
-    ),
-    feedermicte as(
-    select responselogid,distributionnodeid,_624,_645,_952,_2021,_954,_2027,_633,_634,_630,_631,_934,_650 from etl_feeder_midata r
-    where not exists (select 1 from tblidatum_updatemi_logs x where x.distnid = r.distributionnodeid and x.status = false and x.type_id = 106)
+        -- safe cpa
+        nullif(pb.value ->> 'categorypropertyallocationid','')::int as cpa_id
 
-    ),
-    cmicte as(
-    select responselogid,distributionnodeid,_57,_354,_68,_359,_70,_71,_67,_203,_941,_355,_53,_2061 from etl_cmidata r
-    where not exists (select 1 from tblidatum_updatemi_logs x where x.distnid = r.distributionnodeid and x.status = false and x.type_id = 106)
+        from missing_dist m
+        cross join lateral jsonb_array_elements(safe_jsonb(m.response) -> 'propertiesBean') pb(value)
+    )
+    ,cteamain as(
 
-    ),
-    omcte as(
-    select responselogid,distributionnodeid,_1489,_1300,_1960,_1961,_1957,_1958,_1504,_1505,_1520,_1966,_1955 from etl_omdata r
-    where not exists (select 1 from tblidatum_updatemi_logs x where x.distnid = r.distributionnodeid and x.status = false and x.type_id = 106)
-
-    ),
-    dtomcte as(
-    select responselogid,distributionnodeid,_1633,_1625,_1640,_1641,_1068,_1069,_1667 from etl_dtomdata r
-    where not exists (select 1 from tblidatum_updatemi_logs x where x.distnid = r.distributionnodeid and x.status = false and x.type_id = 106)
-
-    ),
-    feederomcte as(
-    select responselogid,distributionnodeid,_1787,_1781,_984,_993,_1796,_1797,_1005,_1006,_1001,_1002,_1820 from etl_feederomdata r
-    where not exists (select 1 from tblidatum_updatemi_logs x where x.distnid = r.distributionnodeid and x.status = false and x.type_id = 106)
-
-    ), missing_dist as (
-    select r.responselogid, r.distnid,r.responsetime,r.surveydate,r.distcode,r.activityid,r.nodetype,r.serveyorid
-    from tblresponselogs r
-    where r.responsestatusid>=0 and r.projectid=19 and r.activityid not in (1) and
-    not exists (select 1 from tblidatum_updatemi_logs x where x.distnid = r.distnid and x.status = false and x.type_id = 106) --and r.distnid=1419
-    ),cteamain as(
-    select distinct r.responselogid,r.activityid,r.distcode,r.distnid,u.username as meterinstallbyid, concat(u."FirstName",'',u."LastName") meterinstalledby
-    , to_timestamp(r.surveydate || ' ' || r.responsetime,'DD/MM/YYYY HH24:MI:SS')::date as installation_date --to_timestamp(s.surveydate || ' ' || s.surveytime,'dd/mm/yyyy hh24:mi:ss')::date
-    ,(case when r.nodetype=1 then 'Consumer' when r.nodetype=7 then 'DT' when r.nodetype=6 then 'Feeder' end) as servicecategory ,(case when r.activityid in (72,44,46) then 'MI' when r.activityid in (3) then 'NSC' when r.activityid in (10,11,12) then 'ONM' end) as servicesubcategory
-    ,(case when exists(select 1 from tblresurvey s
-    join tblresponselogs old on old.responselogid=s.responseid
-    where old.distnid=r.distnid and s.resurvey=1 and old.responselogid = (select max(rr.responselogid) from tblresponselogs rr where rr.distnid=r.distnid and rr.responselogid<r.responselogid)
-    )then 'Resurvey' else 'Fresh MI' end) as remarks,
-    coalesce(a._57,b._57,c._908,d._624,e._57,f._1489,g._1633,h._1787)as meternum,
-    coalesce(a._354,c._530,d._645,e._354,f._1300,g._1625,g._1625,h._1781,h._993,h._984)as oldmeternum,
-    coalesce(a._68,b._68,c._956,d._952,d._2021,e._68,f._1960,g._1640,h._1796)as bodyseal1,
-    coalesce(a._359,b._359,c._958,d._954,d._2027,e._359,f._1961,g._1641,h._1797)as bodyseal2,
-    coalesce(a._70,b._70,c._575,d._633,e._70,f._1957,h._1005)as boxseal1,
-    coalesce(a._71,b._71,c._576,d._634,e._71,f._1958,h._1006)as boxseal2,
-    coalesce(a._67,c._568,d._630,e._67,f._1504,g._1068,h._1001)as termseal1,
-    coalesce(a._203,c._569,d._631,e._203,f._1505,g._1069,h._1002)as termseal2,
-    coalesce(a._941,b._941,c._943,e._941)as cablelength,
-    coalesce(a._355,c._674,d._650,e._355)as barcode,
-    coalesce(a._2061,a._2061,e._2061)AS cablename,
-    coalesce(f._1520,g._1667,f._1966)AS oldmetcondition,
-    coalesce(f._1955)AS consumer_status
-    from missing_dist r
-    left join micte a on a.responselogid=r.responselogid
-    left join nsccte b on b.responselogid=r.responselogid
-    left join dtmicte c on c.responselogid=r.responselogid
-    left join feedermicte d on d.responselogid=r.responselogid
-    left join cmicte e on e.responselogid=r.responselogid
-    left join omcte f on f.responselogid=r.responselogid
-    left join dtomcte g on g.responselogid=r.responselogid
-    left join feederomcte h on h.responselogid=r.responselogid
-    inner join tblusers u on u.userid=r.serveyorid
+        select distinct r.responselogid,r.activityid,r.distcode,r.distnid,u.username as meterinstallbyid, concat(u."FirstName",'',u."LastName") meterinstalledby
+        , to_timestamp(r.surveydate || ' ' || r.responsetime,'DD/MM/YYYY HH24:MI:SS')::date as installation_date --to_timestamp(s.surveydate || ' ' || s.surveytime,'dd/mm/yyyy hh24:mi:ss')::date
+        ,(case when r.nodetype=1 then 'Consumer' when r.nodetype=7 then 'DT' when r.nodetype=6 then 'Feeder' end) as servicecategory ,(case when r.activityid in (72,44,46) then 'MI' when r.activityid in (3) then 'NSC' when r.activityid in (10,11,12) then 'ONM' when r.activityid in (82,84) then 'SIM Addition' end) as servicesubcategory
+        ,(case when exists(select 1 from tblresurvey s
+        join tblresponselogs old on old.responselogid=s.responseid
+        where old.distnid=r.distnid and s.resurvey=1 and old.responselogid = (select max(rr.responselogid) from tblresponselogs rr where rr.distnid=r.distnid and rr.responselogid<r.responselogid)
+        )then 'Resurvey' else 'Fresh MI' end) as remarks
+        from base b
+        join tblresponselogs r on r.responselogid=b.responselogid
+         left join tbl_idatum_crvdetails crv on crv.serialno=upper(b.meter_Id)
+        left join tblidatum_updatemi_logs um on um.distnid = b.distnid and um.request::jsonb ->> 'serialNumber' = b.meter_Id
+        inner join tblusers u on u.userid=r.serveyorid
+        where um.request::jsonb ->> 'serialNumber' is null and b.meter_Id <>''
     )--select * from cteamain
+    ,
+    pivoted  as(
+        select c.responselogid,
+
+        max(val ->> 'meter_Id')
+            filter (where cpa_id in ('57','908','624','1489','1787','1633','2228'))        as meternum,
+
+        max(val ->> 'value')
+            filter (where cpa_id in ('354','530','645','1625','1300','1625','1781','993','984'))       as oldmeternum,
+
+        max(val ->> 'seal_number')
+            filter (where cpa_id in ('68','956','952','2021','1640')) as bodyseal1,
+
+        max(val ->> 'seal_number')
+            filter (where cpa_id in ('359','958','954','2027','1641')) as bodyseal2,
+
+        max(val ->> 'seal_number')
+            filter (where cpa_id in ('70','575','633'))        as boxseal1,
+
+        max(val ->> 'seal_number')
+            filter (where cpa_id in ('71','576','634'))        as boxseal2,
+
+        max(val ->> 'seal_number')
+            filter (where cpa_id in ('67','568','630'))        as termseal1,
+
+        max(val ->> 'seal_number')
+            filter (where cpa_id in ('203','569','631'))       as termseal2,
+
+        max(val ->> 'value')
+            filter (where cpa_id in ('941','797','943','941'))             as cablelength,
+
+        max(val ->> 'value')
+            filter (where cpa_id in ('674','650'))             as barcode,
+
+        MAX(coalesce(valId ->> 'valueId',valId::text))
+            FILTER (WHERE cpa_id IN ('2061','1035','2061'))             AS cablename,
+
+        max(val ->> 'value')
+            FILTER (WHERE cpa_id IN ('1776','1520','1667','1966'))             AS oldmetcondition,
+
+        MAX(val ->> 'value')
+            FILTER (WHERE cpa_id IN ('1955'))             AS consumer_status,
+
+        MAX(val ->> 'meter_Id')
+            FILTER (WHERE cpa_id IN ('2048','2232'))             AS sim_barcode,
+
+        MAX(val ->> 'value')
+            FILTER (WHERE cpa_id IN ('2052'))             AS di_installed
+
+        from base c
+        group by c.responselogid
+
+    )
     , pivoted_with_sim as (
-    select f.sim_no,p.responselogid,p.meternum::jsonb>>'meter_Id' as meternum
-    from cteamain p
-    left join tblfactoryfiledetails f on f.serial_number = upper(p.meternum::jsonb->>'meter_Id')
+        select p.*,f.sim_no
+        from pivoted p
+        left join tblfactoryfiledetails f on f.serial_number = upper(p.meternum)
     ),
-    miinsert_cte as(
-    --INSERT INTO public.tblidatum_updatemi_logs (distnid,distributionnodecode,request,description,type_id,created_datetime)
-    select distinct m.distnid,distcode,jsonb_build_object('serialNumber',coalescE(upper(p.meternum),''), 'meterStatus','10', 'Stock Status','No', 'meterInstalledById',coalescE(meterinstallbyid,''), 'meterInstalledByName',coalescE(meterinstalledby,''), 'meterInstalledDate',coalescE(installation_date::text,'')
-    , 'Id',coalesce(distcode,''), 'oldMeterSerialNumber',coalescE(upper(oldmeternum),upper(barcode),''), 'BodySeal1',coalescE(case when bodyseal1 like '{%' then bodyseal1::jsonb->>'seal_number' else bodyseal1 end,''), 'BodySeal2',coalesce(case when bodyseal2 like '{%' then bodyseal2::jsonb->>'seal_number' else bodyseal2 end,''), 'BoxSeal1',coalesce(case when boxseal1 like '{%' then boxseal1::jsonb->>'seal_number' else boxseal1 end,''), 'BoxSeal2',coalesce(case when boxseal2 like '{%' then boxseal2::jsonb->>'seal_number' else boxseal2 end,''), 'TerminalSeal1',coalesce(case when termseal1 like '{%' then termseal1::jsonb->>'seal_number' else termseal1 end,''), 'TerminalSeal2',coalesce(case when termseal2 like '{%' then termseal2::jsonb->>'seal_number' else termseal2 end,'')
-    , 'smcBoxOEMId',(case when mm.mat_subcategory='SMC Box' then mm.sap_vendor_code else '' end), 'smcBoxSAPId',(case when mm.mat_subcategory='SMC Box' then mm.sap_vendor_oem_name else '' end), 'smcBoxSerialNo','','cableLengthConsumed',coalesce(cablelength,''), 'cableSAPId',(case when mm.mat_subcategory in ('Service Cable','cable') then mm.sap_material_code else '' end), 'cableOEMID',(case when mm.mat_subcategory in ('Service Cable','cable') then mm.sap_vendor_code else '' end), 'oldMeterCondtion',coalesce(case when oldmetcondition in ('OK','Active') then 'Good' else oldmetcondition end,''), 'newCT','', 'newCTRatio','', 'SIMNo',coalesce(p.sim_no,''), 'serviceCategory',m.servicecategory,'serviceSubCategory',m.servicesubcategory, 'otherserializedMaterialConsumed','[]'::jsonb, 'OthernonserializedMaterialConsumed','[]'::jsonb),m.remarks,106,now()
-    from pivoted_with_sim p
-    join cteamain m on m.responselogid = p.responselogid
-    left join tbl_idatum_crvdetails crv on crv.serialno=upper(p.meternum)
-    left join se_material_master m1 on m1.short_name=m.cablename
-    left join tblidatum_material_master mm on mm.mat_rid=m1.mm_rid
-    left join tblidatum_updatemi_logs um on um.distnid = m.distnid and um.request::jsonb ->> 'serialNumber' = upper(m.meternum)
-    WHERE (m.meternum IS NOT NULL OR consumer_status = 'PD') and not exists (select 1 from tblidatum_updatemi_logs x where x.distnid = m.distnid and x.status=false)
-    and um.request::jsonb ->> 'serialNumber' is null
-    --returning id,request
+    othernonserial as(
+    SELECT jsonb_build_array(
+        jsonb_build_object(
+            'materialqty', '1',
+            'materialSAPId', '1200502',
+            'materialOEMId', '20100440'
+        )
+    ) AS othernonserializedMaterialConsumed
+    ),
+     miinsert_cte as(
+        INSERT INTO public.tblidatum_updatemi_logs (distnid,distributionnodecode,request,description,type_id,created_datetime)
+        select  distinct m.distnid,distcode,jsonb_build_object('serialNumber',coalescE(upper(meternum),''), 'meterStatus','10', 'Stock Status','No', 'meterInstalledById',coalescE(meterinstallbyid,''), 'meterInstalledByName',coalescE(meterinstalledby,''), 'meterInstalledDate',coalescE(installation_date::text,'')
+        , 'Id',coalesce(distcode,''), 'oldMeterSerialNumber',coalescE(upper(oldmeternum),upper(barcode),''), 'BodySeal1',coalescE(bodyseal1,''), 'BodySeal2',coalesce(bodyseal2,''), 'BoxSeal1',coalesce(boxseal1,''), 'BoxSeal2',coalesce(boxseal2,''), 'TerminalSeal1',coalesce(termseal1,''), 'TerminalSeal2',coalesce(termseal2,'')
+        , 'smcBoxOEMId',(case when mm.mat_subcategory='SMC Box' then mm.sap_vendor_code else '' end), 'smcBoxSAPId',(case when mm.mat_subcategory='SMC Box' then mm.sap_vendor_oem_name else '' end), 'smcBoxSerialNo','','cableLengthConsumed',coalesce(cablelength,''), 'cableSAPId',(case when mm.mat_subcategory in ('Service Cable','cable') then mm.sap_material_code else '' end)
+        , 'cableOEMID',(case when mm.mat_subcategory in ('Service Cable','cable') then mm.sap_vendor_code else '' end), 'oldMeterCondtion',coalesce(case when oldmetcondition in ('OK','Active') then 'Good' else oldmetcondition end,''), 'newCT','', 'newCTRatio','', 'SIMNo',coalesce(case when servicesubcategory='SIM Addition' then sim_barcode else p.sim_no end,''), 'serviceCategory',m.servicecategory,'serviceSubCategory'
+        ,m.servicesubcategory, 'otherserializedMaterialConsumed','[]'::jsonb, 'OthernonserializedMaterialConsumed',(case when di_installed='Yes' then ons.othernonserializedMaterialConsumed else '[]'::jsonb end)),m.remarks,106,now()
+        from pivoted_with_sim p
+        join cteamain m on m.responselogid = p.responselogid
+        left join tbl_idatum_crvdetails crv on crv.serialno=upper(p.meternum)
+        left join se_material_master m1 on m1.short_name=p.cablename
+        left join tblidatum_material_master mm on mm.mat_rid=m1.mm_rid
+        CROSS JOIN othernonserial ons
+        WHERE (meternum IS NOT NULL OR consumer_status = 'PD') and not exists (select 1 from tblidatum_updatemi_logs x where x.distnid = m.distnid and x.status=false)        
+        returning id,request
     )--select * from miinsert_cte
 
 	select id,'',request::json,106
